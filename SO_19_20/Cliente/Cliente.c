@@ -121,7 +121,13 @@ void *inactividade_gestor(void *arg)
             fprintf(stderr, "Info: Atingido o tempo de inactividade do Gestor.\n");
 
             // Terminar o programa
+            fprintf(stdout, "\n-------------------------------------------------\n");
+            fprintf(stdout, "O Gestor encontra-se inactivo há mais de (%d) segundos, pelo que o cliente vai ser terminado.\n", TEMPO_INACTIVIDADE_GESTOR);
+            fprintf(stdout, "-------------------------------------------------\n");
+            fflush(stdout);
+
             fprintf(stderr, "Info: Programa cliente a terminar.\n");
+
             exit(1);
         }
         sleep(1);
@@ -158,8 +164,81 @@ void *leitura_do_fifo(void *arg)
             case MSG_CONFIRMAR_USERNAME:
                 strcpy(username,msg_gc.username);
                 break;
-            case MSG_ENVIAR_HEARTBEAT_GESTOR:
+
+            case  MSG_ERRO_MENSAGEM:
+                fprintf(stdout, "\n-------------------------------------------------\n");
+                fprintf(stdout, "A seguinte mensagem foi recusada pelo gestor:\n");
+                fprintf(stdout, "Topico: %s\n", msg_gc.topico);
+                fprintf(stdout, "Título: %s\n", msg_gc.titulo);
+                fprintf(stdout, "Corpo: %s\n", msg_gc.corpo);
+                fprintf(stdout, "-------------------------------------------------\n");
+                fflush(stdout);
                 break;
+
+            case  MSG_ENVIAR_TOPICOS:
+                fprintf(stdout, "\n-------------------------------------------------\n");
+                fprintf(stdout, "Os tópicos existentes são:\n");
+                fprintf(stdout, "%s\n", msg_gc.topicos);
+                fprintf(stdout, "-------------------------------------------------\n");
+                fflush(stdout);
+                break;
+
+            case  MSG_ENVIAR_TITULOS_DE_TOPICO:
+                fprintf(stdout, "\n-------------------------------------------------\n");
+                fprintf(stdout, "Os títulos do tópico (%s) são:\n", msg_gc.topico);
+                fprintf(stdout, "%s\n", msg_gc.titulos);
+                fprintf(stdout, "-------------------------------------------------\n");
+                fflush(stdout);
+                break;
+
+            case  MSG_ENVIAR_MENSAGEM_DE_TOPICO:
+                fprintf(stdout, "\n-------------------------------------------------\n");
+                fprintf(stdout, "A mensagem solicitada é: \n");
+                fprintf(stdout, "Topico: %s\n", msg_gc.topico);
+                fprintf(stdout, "Título: %s\n", msg_gc.titulo);
+                fprintf(stdout, "Corpo: %s\n", msg_gc.corpo);
+                fprintf(stdout, "-------------------------------------------------\n");
+                fflush(stdout);
+                break;
+
+            case  MSG_CONFIRMAR_SUBSCRICAO_TOPICO:
+                fprintf(stdout, "\n-------------------------------------------------\n");
+                fprintf(stdout, "O tópico (%s) foi subscrito:\n", msg_gc.topico);
+                fprintf(stdout, "-------------------------------------------------\n");
+                fflush(stdout);
+                break;
+
+            case  MSG_CONFIRMAR_CANCELAMENTO_SUBSCICAO_TOPICO:
+                fprintf(stdout, "\n-------------------------------------------------\n");
+                fprintf(stdout, "A subscrição do tópico (%s) foi cancelada:\n", msg_gc.topico);
+                fprintf(stdout, "-------------------------------------------------\n");
+                fflush(stdout);
+                break;
+
+            case  MSG_ENVIAR_HEARTBEAT_GESTOR:
+                // Não é necessário fazer nada pois o reset do tempo de inactividade é feito independentemente do tipo de mensagem.
+                break;
+
+            case  MSG_NOTIFICAR_FIM_EXECUCAO_GESTOR:
+                fprintf(stdout, "\n-------------------------------------------------\n");
+                fprintf(stdout, "O Gestor foi encerrado, pelo que o cliente vai ser terminado.\n");
+                fprintf(stdout, "-------------------------------------------------\n");
+                fflush(stdout);
+
+                // Terminar o programa
+                fprintf(stderr, "Info: Programa cliente a terminar.\n");
+                exit(1);
+                break;
+
+            case  MSG_NOTIFICAR_NOVA_MENSAGEM_TOPICO:
+                fprintf(stdout, "\n-------------------------------------------------\n");
+                fprintf(stdout, "Existe uma nova mensagem com os seguintes dados:\n");
+                fprintf(stdout, "Tópico: %s\n", msg_gc.topico);
+                fprintf(stdout, "Título: %s\n", msg_gc.titulo);
+                fprintf(stdout, "-------------------------------------------------\n");
+                fflush(stdout);
+                break;
+
             default:
                 fprintf(stderr, "Erro: Recebida mensagem de tipo inválido (%d).\n", msg_gc.tipoinfo);
         }
@@ -258,6 +337,7 @@ void *interaccao_com_utilizador(void *arg)
                 // Opção invalida
                 break;
         }
+        sleep(1);
     }while(op != 0);
 
     return NULL;

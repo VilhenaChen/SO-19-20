@@ -4,6 +4,9 @@ void limpa_msg_gc(gc* msg_gc){
     memset(msg_gc, 0, sizeof(*msg_gc));
 }
 
+void limpa_msg_cg(cg* msg_cg){
+    memset(msg_cg, 0, sizeof(*msg_cg));
+}
 // Criação de mensagens para enviar para os clientes
 
 

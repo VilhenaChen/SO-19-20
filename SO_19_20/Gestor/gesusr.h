@@ -13,6 +13,6 @@ struct users
 
 struct top_user
 {
-	char topico[50];
+	char topico[101];
 	ptu prox;
 };

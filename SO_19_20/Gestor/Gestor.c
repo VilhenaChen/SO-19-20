@@ -244,17 +244,197 @@ void *leitura_do_fifo_do_gestor(void *arg)
 // Thread para receber e processar as mensagens dos FIFOs (vindas dos clientes)
 void *leitura_dos_fifos_dos_clientes(void *arg)
 {
-    cg msg_gc; // passar a gc
-
+    cg msg_cg;
+    gc msg_gc;
+    pusr aux_percorre_users;
+    ptop aux_percorre_topicos;
+    pmsg aux_percorre_mensagens;
+    ptu aux_insere_topico_user;
+    ptu aux_apaga_topico_user;
+    ptu aux_a_percorre_topico_user;
+    ptu aux_b_percorre_topico_user;
     // FIFO para recepção: Gestor -> Cliente
     int fd_fifo;
     char nome_fifo_cli_w[20];
+    char nome_fifo_cli_r[20];
+    char topicos[2001];
+    char titulos[2001];
 
+    int verifica_leitura_fifo;
     pthread_t id = pthread_self();
 
     while (1)
     {
         //TODO: Percorrer lista de clientes e ler dos fifos
+        for (aux_percorre_users = users_head; aux_percorre_users!= NULL; aux_percorre_users = aux_percorre_users->prox)
+        {
+            strcpy(topicos,"");
+            strcpy(topicos,"");
+
+            strcpy(nome_fifo_cli_w,aux_percorre_users->fifow);
+            limpa_msg_cg(&msg_cg);
+            fd_fifo = open(nome_fifo_cli_w, O_RDONLY);
+            verifica_leitura_fifo=read(fd_fifo,&msg_cg,sizeof(&msg_cg));
+            if (verifica_leitura_fifo==0)
+            {
+                close(fd_fifo);
+            }
+            else if (verifica_leitura_fifo==-1) 
+            { // error
+                fprintf(stderr, "Erro: Não foi possivel ler do fifo (%S).\n", nome_fifo_cli_w);
+                close(fd_fifo);
+            } 
+            else 
+            { // available data
+                close(fd_fifo);
+                aux_percorre_users->tempo_inactividade=0;
+                switch (msg_cg.tipoinfo)
+                {
+                    case MSG_ENVIAR_MENSAGEM:
+                        break;
+
+                    case MSG_CONSULTAR_TOPICOS :
+                        //TODO: Mudar Tamanho topicos porque levam \n entre eles e dos titulos tambem
+                        if(topicos_head!=NULL)
+                        {
+                            strcpy(topicos,topicos_head->topico);
+                            for(aux_percorre_topicos=topicos_head->prox;aux_percorre_topicos!=NULL;aux_percorre_topicos=aux_percorre_topicos->prox)
+                            {
+                                strcat(topicos,"\n");
+                                strcat(topicos,aux_percorre_topicos->topico);
+                            }
+                        }
+                        else
+                        {
+                            strcpy(topicos,"A lista de topicos esta vazia\n");
+                        }
+                        msg_enviar_topicos(&msg_gc,topicos);
+                        escreve_msg_no_fifo(aux_percorre_users->fifor,&msg_gc);
+                        break;
+
+                    case MSG_CONSULTAR_TITULOS_TOPICO:
+                        //TODO: Verificar se o topico existe
+                        //TODO: Verificar se o topico tem alguma mensagem, se nao, elimina-lo
+                        if(topicos_head!=NULL)
+                        {
+                            for(aux_percorre_topicos=topicos_head->prox;aux_percorre_topicos!=NULL;aux_percorre_topicos=aux_percorre_topicos->prox)
+                            {
+                            if(aux_percorre_topicos->topico==msg_cg.topico)
+                            {
+                                    strcpy(titulos,aux_percorre_topicos->lmensagem->titulo);
+                                    for(aux_percorre_mensagens=aux_percorre_topicos->lmensagem->prox;aux_percorre_mensagens!=NULL;aux_percorre_mensagens=aux_percorre_mensagens->prox)
+                                    {
+                                        strcat(titulos,"\n");
+                                        strcat(titulos,aux_percorre_mensagens->titulo);
+                                    }
+                                    break;
+                            }
+                            }
+                            msg_enviar_titulos_topico(&msg_gc,msg_cg.topico,titulos);
+                            escreve_msg_no_fifo(aux_percorre_users->fifor,&msg_gc);
+                        }
+                        else
+                        {
+                            //??
+                            fprintf(stderr,"ERRO: A lista de topicos esta vazia\n");
+                        }
+                        break;
+
+                    case MSG_CONSULTAR_MENSAGEM_TOPICO:
+                        if(topicos_head!=NULL)
+                        {
+                            for(aux_percorre_topicos=topicos_head->prox;aux_percorre_topicos!=NULL;aux_percorre_topicos=aux_percorre_topicos->prox)
+                            {
+                            if(aux_percorre_topicos->topico==msg_cg.topico)
+                            {
+                                    for(aux_percorre_mensagens=aux_percorre_topicos->lmensagem;aux_percorre_mensagens!=NULL;aux_percorre_mensagens=aux_percorre_mensagens->prox)
+                                    {
+                                        if(aux_percorre_mensagens->titulo==msg_cg.titulo)
+                                        {
+                                            msg_enviar_mensagem_topico(&msg_gc,msg_cg.topico,msg_cg.titulo,aux_percorre_mensagens->corpo);
+                                            break;
+                                        }
+                                    }
+                                    break;
+                            }
+                            }
+                            escreve_msg_no_fifo(aux_percorre_users->fifor,&msg_gc);
+                        }
+                        else
+                        {
+                            //??
+                            fprintf(stderr,"ERRO: A lista de topicos esta vazia\n");
+                        }
+                        break;
+
+                    case MSG_SUBSCREVER_TOPICO:
+                        if(topicos_head!=NULL)
+                        {
+                            for(aux_percorre_topicos=topicos_head->prox;aux_percorre_topicos!=NULL;aux_percorre_topicos=aux_percorre_topicos->prox)
+                            {
+                                if(aux_percorre_topicos->topico==msg_cg.topico)
+                                {
+                                    aux_insere_topico_user=malloc(sizeof(tu));
+                                    strcpy(aux_insere_topico_user->topico,msg_cg.topico);
+                                    aux_insere_topico_user->prox=aux_percorre_users->topcs;
+                                    aux_percorre_users->topcs=aux_insere_topico_user;
+                                    msg_confirmar_subscricao_de_topico(&msg_gc,aux_percorre_topicos->topico);
+                                    break;
+                                }
+                            }
+                        }
+                        else
+                        {
+                            fprintf(stderr,"ERRO: A lista de topicos esta vazia\n");
+                        }
+                        escreve_msg_no_fifo(aux_percorre_users->fifor,&msg_gc);
+                        break;
+
+                    case MSG_CANCELAR_SUBSCICAO_TOPICO:
+                        for(aux_a_percorre_topico_user = aux_percorre_users->topcs;aux_a_percorre_topico_user!=NULL;aux_a_percorre_topico_user=aux_a_percorre_topico_user->prox)
+                        {
+                            if(aux_a_percorre_topico_user->topico == msg_cg.topico)
+                            {
+                                aux_apaga_topico_user=aux_a_percorre_topico_user;
+                                if(aux_apaga_topico_user!=aux_percorre_users->topcs)
+                                {
+                                    for(aux_b_percorre_topico_user=aux_percorre_users->topcs;aux_a_percorre_topico_user!=NULL;aux_a_percorre_topico_user=aux_a_percorre_topico_user->prox)
+                                    {
+                                        if(aux_b_percorre_topico_user->prox == aux_apaga_topico_user)
+                                        {
+                                            aux_b_percorre_topico_user->prox=aux_apaga_topico_user->prox;
+                                            free(aux_apaga_topico_user);
+                                            break;
+                                        }
+                                    }
+                                }
+                                else
+                                {
+                                    aux_percorre_users->topcs=aux_apaga_topico_user->prox;
+                                }
+                                break;
+                            }
+                        }
+                        msg_confirmar_cancelamento_subscricao_de_topico(&msg_gc,aux_percorre_topicos->topico);
+                        escreve_msg_no_fifo(aux_percorre_users->fifor,&msg_gc);
+                        break;
+
+                    case MSG_ENVIAR_HEARTBEAT_CLIENTE:
+                        break;
+
+                    case MSG_NOTIFICAR_FIM_EXECUCAO_CLIENTE:
+                        break;
+                        
+                    default:
+                        break;
+                }
+            }
+            
+            /*strcpy(nome_fifo_cli_r, aux_percorre_a->fifor);
+            limpa_msg_gc(&msg_gc);
+            msg_heartbeat_gestor(&msg_gc);
+            escreve_msg_no_fifo(nome_fifo_cli_r, &msg_gc);*/
+        }
         /*while ()
         {
             fd_fifo = open(nome_fifo_cli_r, O_RDONLY);
