@@ -24,4 +24,13 @@ void clean_stdin()
         c = getchar();
     } while (c != '\n' && c != EOF);
 }
+
+void retira_enter_final(char* string)
+{
+    if(string[strlen(string)-1]=='\n')
+    {
+        string[strlen(string)-1]='\0';
+    }
+}
+
 #endif

@@ -78,6 +78,7 @@ void envia_registo_de_username(){
 
     printf("\nIntroduza nome de utilizador:");
     scanf("%s", username);
+    retira_enter_final(username);
     clean_stdin();
     msg_registar_username(&msg_cg, username, nome_fifo_cli_w, nome_fifo_cli_r);
     escreve_msg_no_fifo(nome_fifo_ges, &msg_cg);

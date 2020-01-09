@@ -134,6 +134,11 @@ void *expiracao_de_mensagens(void *arg) {
                         aux_percorre_topicos->lmensagem=aux_apaga->prox;
                         free(aux_apaga);
                     }
+
+                    if(aux_percorre_topicos==NULL)
+                    {
+                        break;
+                    }
                 } 
             }
         }
@@ -184,6 +189,11 @@ void *inactividade_de_clientes(void *arg) {
                     users_head=aux_apaga->prox;
                     aux_percorre_a=users_head;
                     free(aux_apaga);
+                }
+
+                if(aux_percorre_a==NULL)
+                {
+                    break;
                 }
             } 
         }
@@ -257,6 +267,7 @@ void *leitura_do_fifo_do_gestor(void *arg)
                 strcpy(aux_username->fifow,msg_cg.fifoclienvia);
                 aux_username->tempo_inactividade=0;
                 aux_username->indice=0;
+                aux_username->topcs=NULL;
                 for(aux_percorre_a=users_head;aux_percorre_a!=NULL;aux_percorre_a=aux_percorre_a->prox)
                 {
                     if(strcmp(aux_username->nome,aux_percorre_a->nome)==0)
@@ -354,7 +365,6 @@ void *leitura_dos_fifos_dos_clientes(void *arg)
             limpa_msg_cg(&msg_cg);
             fd_fifo = open(nome_fifo_cli_w, O_RDONLY);
             verifica_leitura_fifo=read(fd_fifo,&msg_cg,sizeof(msg_cg));
-            fprintf(stderr," num %d",verifica_leitura_fifo);
             if (verifica_leitura_fifo==0)
             {
                 close(fd_fifo);
@@ -379,7 +389,6 @@ void *leitura_dos_fifos_dos_clientes(void *arg)
                         {
                             resultado_verificacao=1;
                         }
-                        fprintf(stderr,"resultado ver %d",resultado_verificacao);
                         if (resultado_verificacao < 1)
                         {
                             msg_erro_mensagem(&msg_gc,msg_cg.topico,msg_cg.titulo,msg_cg.corpo);
@@ -387,7 +396,6 @@ void *leitura_dos_fifos_dos_clientes(void *arg)
                         }
                         else
                         {
-                            fprintf(stderr,"aaa %s\n",msg_cg.topico);
                             aux_guarda_mensagem=malloc(sizeof(msg));
                             strcpy(aux_guarda_mensagem->topico,msg_cg.topico);
                             strcpy(aux_guarda_mensagem->titulo,msg_cg.titulo);
@@ -396,25 +404,19 @@ void *leitura_dos_fifos_dos_clientes(void *arg)
                             encontrou_topico=0;
                             for(aux_percorre_topicos=topicos_head;aux_percorre_topicos!=NULL;aux_percorre_topicos=aux_percorre_topicos->prox)
                             {
-                                fprintf(stderr,"bbb\n");
                                 if(strcmp(aux_percorre_topicos->topico,aux_guarda_mensagem->topico)==0)
                                 {
-                                    fprintf(stderr,"ccc\n");
                                     if(devolve_numero_titulos(aux_percorre_topicos->topico)<20)
                                     {
-                                        fprintf(stderr,"ddd\n");
                                         aux_guarda_mensagem->prox=aux_percorre_topicos->lmensagem;
                                         aux_percorre_topicos->lmensagem=aux_guarda_mensagem;
                                         encontrou_topico=1;
                                         for(aux_percorre_users_b=users_head;aux_percorre_users_b!=NULL;aux_percorre_users_b=aux_percorre_users_b->prox)
                                         {
-                                            fprintf(stderr,"eee\n");
-                                            for(aux_a_percorre_topico_user=aux_percorre_users->topcs;aux_a_percorre_topico_user!=NULL;aux_a_percorre_topico_user=aux_a_percorre_topico_user->prox)
+                                            for(aux_a_percorre_topico_user=aux_percorre_users_b->topcs;aux_a_percorre_topico_user!=NULL;aux_a_percorre_topico_user=aux_a_percorre_topico_user->prox)
                                             {
-                                                fprintf(stderr,"fff\n");
                                                 if(strcmp(aux_a_percorre_topico_user->topico,msg_cg.topico)==0)
                                                 {
-                                                    fprintf(stderr,"ggg\n");
                                                     msg_notificar_nova_mensagem_topico(&msg_gc,msg_cg.topico,msg_cg.titulo);
                                                     escreve_msg_no_fifo(aux_percorre_users_b->fifor,&msg_gc);
                                                 }
@@ -424,7 +426,6 @@ void *leitura_dos_fifos_dos_clientes(void *arg)
                                     }
                                     else
                                     {
-                                        fprintf(stderr,"hhh\n");
                                         msg_erro_mensagem(&msg_gc,msg_cg.topico,msg_cg.titulo,msg_cg.corpo);
                                         escreve_msg_no_fifo(aux_percorre_users->fifor,&msg_gc);                                 
                                     }
@@ -432,10 +433,8 @@ void *leitura_dos_fifos_dos_clientes(void *arg)
                             }
                             if(encontrou_topico!=1)
                             {
-                                fprintf(stderr,"iii\n");
                                 if(devolve_numero_topicos()<20)
                                 {
-                                    fprintf(stderr,"jjj\n");
                                     aux_guarda_topico=malloc(sizeof(top));
                                     strcpy(aux_guarda_topico->topico,aux_guarda_mensagem->topico);
                                     aux_guarda_topico->lmensagem=NULL;
@@ -443,8 +442,6 @@ void *leitura_dos_fifos_dos_clientes(void *arg)
                                     aux_guarda_topico->lmensagem=aux_guarda_mensagem;
                                     aux_guarda_topico->prox=topicos_head;
                                     topicos_head=aux_guarda_topico;
-                                    fprintf(stderr,"topicos %s\n",topicos_head->topico);
-                                    fprintf(stderr,"tam top %d\n",devolve_numero_topicos());
                                 }
                             }
                         }  
@@ -472,8 +469,8 @@ void *leitura_dos_fifos_dos_clientes(void *arg)
                         if(topicos_head!=NULL)
                         {
                             encontrou_topico=0;
-                            for(aux_percorre_topicos=topicos_head->prox;aux_percorre_topicos!=NULL;aux_percorre_topicos=aux_percorre_topicos->prox)
-                            {
+                            for(aux_percorre_topicos=topicos_head;aux_percorre_topicos!=NULL;aux_percorre_topicos=aux_percorre_topicos->prox)
+                            {   
                                 if(strcmp(aux_percorre_topicos->topico,msg_cg.topico)==0)
                                 {
                                     if(aux_percorre_topicos->lmensagem!=NULL)
@@ -514,7 +511,7 @@ void *leitura_dos_fifos_dos_clientes(void *arg)
                         if(topicos_head!=NULL)
                         {
                             encontrou_topico=0;
-                            for(aux_percorre_topicos=topicos_head->prox;aux_percorre_topicos!=NULL;aux_percorre_topicos=aux_percorre_topicos->prox)
+                            for(aux_percorre_topicos=topicos_head;aux_percorre_topicos!=NULL;aux_percorre_topicos=aux_percorre_topicos->prox)
                             {
                                 if(strcmp(aux_percorre_topicos->topico,msg_cg.topico)==0)
                                 {
@@ -555,7 +552,7 @@ void *leitura_dos_fifos_dos_clientes(void *arg)
                         if(topicos_head!=NULL)
                         {
                             encontrou_topico=0;
-                            for(aux_percorre_topicos=topicos_head->prox;aux_percorre_topicos!=NULL;aux_percorre_topicos=aux_percorre_topicos->prox)
+                            for(aux_percorre_topicos=topicos_head;aux_percorre_topicos!=NULL;aux_percorre_topicos=aux_percorre_topicos->prox)
                             {
                                 if(strcmp(aux_percorre_topicos->topico,msg_cg.topico)==0)
                                 {
@@ -584,15 +581,15 @@ void *leitura_dos_fifos_dos_clientes(void *arg)
                         break;
 
                     case MSG_CANCELAR_SUBSCICAO_TOPICO:
-                        if(aux_percorre_users_b->topcs!=NULL)
+                        if(aux_percorre_users->topcs!=NULL)
                         {
                             encontrou_topico=0;
-                            for(aux_a_percorre_topico_user = aux_percorre_users_b->topcs;aux_a_percorre_topico_user!=NULL;aux_a_percorre_topico_user=aux_a_percorre_topico_user->prox)
+                            for(aux_a_percorre_topico_user = aux_percorre_users->topcs;aux_a_percorre_topico_user!=NULL;aux_a_percorre_topico_user=aux_a_percorre_topico_user->prox)
                             {
                                 if(strcmp(aux_a_percorre_topico_user->topico,msg_cg.topico)==0)
                                 {
                                     aux_apaga_topico_user=aux_a_percorre_topico_user;
-                                    if(aux_apaga_topico_user!=aux_percorre_users_b->topcs)
+                                    if(aux_apaga_topico_user!=aux_percorre_users->topcs)
                                     {
                                         for(aux_b_percorre_topico_user=aux_percorre_users_b->topcs;aux_a_percorre_topico_user!=NULL;aux_a_percorre_topico_user=aux_a_percorre_topico_user->prox)
                                         {
@@ -612,6 +609,7 @@ void *leitura_dos_fifos_dos_clientes(void *arg)
                                         free(aux_percorre_users);
                                     }
                                     msg_confirmar_cancelamento_subscricao_de_topico(&msg_gc,aux_percorre_topicos->topico);
+                                    encontrou_topico=1;
                                     break;
                                 }
                             }
@@ -662,48 +660,29 @@ void *leitura_dos_fifos_dos_clientes(void *arg)
                         break;
                 }
             }
-            
-            /*strcpy(nome_fifo_cli_r, aux_percorre_a->fifor);
-            limpa_msg_gc(&msg_gc);
-            msg_heartbeat_gestor(&msg_gc);
-            escreve_msg_no_fifo(nome_fifo_cli_r, &msg_gc);*/
-        }
-        /*while ()
-        {
-            fd_fifo = open(nome_fifo_cli_r, O_RDONLY);
 
-            // Ler do fifo
-            read(fd_fifo, &msg_gc, sizeof(msg_gc));
-
-            // imprimir log
-            fprintf(stderr, "Info: Recebida mensagem do tipo (%d).\n", msg_gc.tipoinfo);
-
-            switch (msg_gc.tipoinfo){
-                case MSG_CONFIRMAR_USERNAME:
-
-                    break;
-                default:
-                    fprintf(stderr, "Erro: Recebida mensagem de tipo invlálido (%d).\n", msg_gc.tipoinfo);
+            if(aux_percorre_users==NULL)
+            {
+                break;
             }
-
-            close(fd_fifo);
-        }*/
+        }
 
     }
 
     return NULL;
 }
 
-// TODO: Thread para tratar da interacção com o utilizador
+// Thread para tratar da interacção com o utilizador
 void *interaccao_com_utilizador(void *arg)
 {
     gc msg_gc;
     char input[MAXCOMANDO];
+    char comando[20];
     char com[20];
     char argumento[20];
-    int found_topic = 0;
-    int found_msg = 0;
-    int found_usr = 0;
+    int found_topic;
+    int found_msg;
+    int found_usr;
     pusr aux_percorreusr;
     pusr aux_apaga_usr;
     pusr aux_percorreusr_b;
@@ -720,9 +699,13 @@ void *interaccao_com_utilizador(void *arg)
 
     while (1)
     {
+        strcpy(com,"");
+        strcpy(comando,"");
+        strcpy(argumento,"");
         printf("Comando -> ");
-        fgets(com,MAXCOMANDO,stdin);
-        if (sscanf(com, "%s %s", com, argumento) != 2)
+        fgets(comando,MAXCOMANDO,stdin);
+        retira_enter_final(comando);
+        if (sscanf(comando, "%s %s", com, argumento) != 2)
         {
             argumento[0] = '\0';
         }
@@ -810,6 +793,7 @@ void *interaccao_com_utilizador(void *arg)
                         {
                             if (topicos_head != NULL)
                             { 
+                                found_topic=0;
                                 for(aux_percorretop = topicos_head; aux_percorretop != NULL; aux_percorretop = aux_percorretop->prox)
                                 {
                                     if (strcmp(argumento,aux_percorretop->topico) == 0)
@@ -843,6 +827,7 @@ void *interaccao_com_utilizador(void *arg)
                             {
                                 if (topicos_head != NULL)
                                 {
+                                    found_msg=0;
                                     for(aux_percorretop = topicos_head; aux_percorretop != NULL; aux_percorretop = aux_percorretop->prox)
                                     {
                                         for(aux_percorremsg = aux_percorretop->lmensagem; aux_percorremsg != NULL; aux_percorremsg = aux_percorremsg->prox)
@@ -873,6 +858,7 @@ void *interaccao_com_utilizador(void *arg)
                                 {
                                     if (users_head != NULL)
                                     {
+                                        found_msg=0;
                                         for(aux_percorreusr = users_head; aux_percorreusr != NULL; aux_percorreusr = aux_percorreusr->prox)
                                         {
                                             if(strcmp(argumento,aux_percorreusr->nome) == 0)
@@ -886,7 +872,7 @@ void *interaccao_com_utilizador(void *arg)
                                                         if (aux_percorreusr_b->prox == aux_apaga_usr)
                                                         {
                                                             msg_cliente_banido(&msg_gc);
-                                                            escreve_msg_no_fifo(aux_percorreusr_b->fifor, &msg_gc);
+                                                            escreve_msg_no_fifo(aux_percorreusr->fifor, &msg_gc);
                                                             aux_percorreusr_b->prox=aux_apaga_usr->prox;
                                                             elimina_lista_topicos_user(aux_apaga_usr->topcs);
                                                             free(aux_apaga_usr);
@@ -896,6 +882,8 @@ void *interaccao_com_utilizador(void *arg)
                                                 }
                                                 else
                                                 {
+                                                    msg_cliente_banido(&msg_gc);
+                                                    escreve_msg_no_fifo(aux_percorreusr->fifor, &msg_gc);
                                                     users_head=aux_apaga_usr->prox;
                                                     elimina_lista_topicos_user(aux_apaga_usr->topcs);
                                                     free(aux_apaga_usr);
@@ -907,7 +895,10 @@ void *interaccao_com_utilizador(void *arg)
                                             printf("O utilizador nao existe!!!");
                                         }
                                     }
-                                    printf("A lista de Users esta vazia!!!");
+                                    else
+                                    {
+                                        printf("A lista de Users esta vazia!!!");
+                                    }
                                 }
                                 else
                                 {
@@ -951,7 +942,7 @@ void *interaccao_com_utilizador(void *arg)
                                                                             aux_top_usr = aux_percorreusr->topcs;
                                                                             free(aux_apaga_top_usr);
                                                                         }
-                                                                        
+                                                                        break;
                                                                     }
                                                                 }
                                                             }
@@ -972,8 +963,13 @@ void *interaccao_com_utilizador(void *arg)
                                                     else
                                                     {
                                                         aux_percorretop = aux_apaga_top->prox;
+                                                        aux_percorretop = topicos_head;
                                                         free(aux_apaga_top);
-                                                    }                                                    
+                                                    }  
+                                                    if(aux_percorretop==NULL)
+                                                    {
+                                                        break;
+                                                    }                                                  
                                                 }
                                             }
                                         }
@@ -1056,7 +1052,7 @@ int main(void)
     else
         fprintf(stderr, "Info: Thread de leitura dos fifos dos clientes criada.\n");
 
-    /*// Lança a thread de expiração de mensagens
+    // Lança a thread de expiração de mensagens
     erro = pthread_create(&expiracao_de_mensagens_thread, NULL, &expiracao_de_mensagens, NULL);
     if (erro != 0)
         fprintf(stderr, "Erro: Não foi possivel criar a thread de expiração de mensagens. Erro: %s.\n", strerror(erro));
@@ -1069,7 +1065,6 @@ int main(void)
         fprintf(stderr, "Erro: Não foi possivel criar a thread de expiração de clientes. Erro: %s.\n", strerror(erro));
     else
         fprintf(stderr, "Info: Thread de expiração de clientes criada.\n");
-*/
     
     // Lança a thread de interacção com o utilizador
     erro = pthread_create(&interaccao_com_utilizador_thread, NULL, &interaccao_com_utilizador, NULL);

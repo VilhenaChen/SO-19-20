@@ -31,6 +31,7 @@ void msg_consultar_lista_titulos_topico(cg* msg_cg){
     printf("\n[Consulta de titulos de tópico]\n");
     printf("\n> Insira o tópico referente ao qual pretende consultar os titulos: ");
     fgets(topic, sizeof(topic), stdin);
+    retira_enter_final(topic);
 
     msg_cg->tipoinfo = MSG_CONSULTAR_TITULOS_TOPICO;
     strcpy(msg_cg->topico, topic);
@@ -47,6 +48,8 @@ void msg_consultar_lista_mensagens_topico(cg* msg_cg){
     fgets(topic,sizeof(topic),stdin);
     printf("\n> Insira o titulo da mensagem: ");
     fgets(title,sizeof(title),stdin);
+    retira_enter_final(topic);
+    retira_enter_final(title);
 
     msg_cg->tipoinfo = MSG_CONSULTAR_MENSAGEM_TOPICO;
     strcpy(msg_cg->topico, topic);
@@ -60,6 +63,7 @@ void msg_subscrever_topico(cg* msg_cg){
     printf("\n[Subscrição de tópico]\n");
     printf("\n> Insira o tópico que pretende subscrever: ");
     fgets(topic, sizeof(topic), stdin);
+    retira_enter_final(topic);
 
     msg_cg->tipoinfo = MSG_SUBSCREVER_TOPICO;
     strcpy(msg_cg->topico, topic);
@@ -72,6 +76,7 @@ void msg_cancelar_subscricao_topico(cg* msg_cg){
     printf("\n[Cancelamento de subscrição de tópico]\n");
     printf("\n> Insira o tópico do qual pretente cancelar a subscrição: ");
     fgets(topic, sizeof(topic), stdin);
+    retira_enter_final(topic);
 
     msg_cg->tipoinfo = MSG_CANCELAR_SUBSCICAO_TOPICO;
     strcpy(msg_cg->topico, topic);
@@ -101,10 +106,13 @@ void msg_nova_mensagem(cg* msg_cg){
         printf("\n> Duracao da Mensagem: ");
         scanf("%d", &dur);
         clean_stdin();
+        retira_enter_final(topic);
+        retira_enter_final(title);
+        retira_enter_final(corp);
         printf("\n[Conteudo da mensagem]\n");
-        printf("- Topico: %s", topic);
-        printf("- Titulo: %s", title);
-        printf("- Corpo: %s", corp);
+        printf("- Topico: %s\n", topic);
+        printf("- Titulo: %s\n", title);
+        printf("- Corpo: %s\n", corp);
         printf("- Duracao: %d\n", dur);
         do{
             printf("\n> Pretende enviar esta mensagem?");
