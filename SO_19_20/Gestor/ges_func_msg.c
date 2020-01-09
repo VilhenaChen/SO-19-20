@@ -21,10 +21,11 @@ void msg_confirmar_username(gc* msg_gc, char* username){
     return;
 }
 
-void msg_erro_mensagem(gc* msg_gc, char* titulo, char* corpo){
+void msg_erro_mensagem(gc* msg_gc, char* topico, char* titulo, char* corpo){
     msg_gc->tipoinfo = MSG_ERRO_MENSAGEM;
+    strcpy(msg_gc->topico, topico);
     strcpy(msg_gc->titulo, titulo);
-    strcpy(msg_gc->titulo, corpo);
+    strcpy(msg_gc->corpo, corpo);
     return;
 }
 
@@ -64,7 +65,26 @@ void msg_confirmar_cancelamento_subscricao_de_topico(gc* msg_gc, char* topico){
     return;
 }
 
-void msg_fim_de_execucao_gestor(cg* msg_cg){
-    msg_cg->tipoinfo = MSG_NOTIFICAR_FIM_EXECUCAO_GESTOR;
+void msg_fim_de_execucao_gestor(gc* msg_gc){
+    msg_gc->tipoinfo = MSG_NOTIFICAR_FIM_EXECUCAO_GESTOR;
+    return;
+}
+
+void msg_enviar_informacao(gc* msg_gc,char* informacao){
+    msg_gc->tipoinfo = MSG_ENVIAR_INFORMACAO;
+    strcpy(msg_gc->informacao,informacao);
+    return;
+}
+
+void msg_notificar_nova_mensagem_topico(gc* msg_gc, char* topico, char* titulo)
+{
+    msg_gc->tipoinfo = MSG_NOTIFICAR_NOVA_MENSAGEM_TOPICO;
+    strcpy(msg_gc->topico, topico);
+    strcpy(msg_gc->titulo, titulo);
+    return;
+}
+
+void msg_cliente_banido(gc* msg_gc){
+    msg_gc->tipoinfo = MSG_CLIENTE_BANIDO;
     return;
 }

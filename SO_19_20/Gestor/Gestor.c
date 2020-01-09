@@ -14,6 +14,8 @@ pusr users_head = NULL;
 // Head da lista de topicos
 ptop topicos_head = NULL;
 
+// Estado do Filtro do Verificador
+int EstadoFiltro = FILTRO_LIGADO;
 
 int escreve_msg_no_fifo(char* nome_do_fifo, gc* msg_gc)
 {
@@ -24,7 +26,7 @@ int escreve_msg_no_fifo(char* nome_do_fifo, gc* msg_gc)
     fd_fifo = open (nome_do_fifo, O_WRONLY | O_NONBLOCK);
     if (fd_fifo == -1)
     {
-        fprintf(stderr, "Erro: Nao foi possivel comunicar com o Gestor!");
+        fprintf(stderr, "Erro: Nao foi possivel comunicar com o Cliente!");
         return 0;
     }
     write(fd_fifo, msg_gc, sizeof(*msg_gc));
@@ -49,6 +51,45 @@ int cria_fifo_gestor()
     }
 
     return 1;
+}
+
+int devolve_numero_titulos(char* topico)
+{
+    ptop aux_percorre_topicos;
+    pmsg aux_percorre_titulos;
+    int cont=0;
+    for(aux_percorre_topicos=topicos_head;aux_percorre_topicos!=NULL;aux_percorre_topicos=aux_percorre_topicos->prox)
+    {
+        if(strcmp(aux_percorre_topicos->topico,aux_percorre_topicos->topico)==0)
+        {
+            for(aux_percorre_titulos=aux_percorre_topicos->lmensagem;aux_percorre_titulos!=NULL;aux_percorre_titulos=aux_percorre_titulos->prox)
+            {
+                cont++;
+            }
+        }
+        break;
+    }
+    return cont;
+}
+
+int devolve_numero_topicos()
+{
+    ptop aux_percorre_topicos;
+    int cont=0;
+    for(aux_percorre_topicos=topicos_head;aux_percorre_topicos!=NULL;aux_percorre_topicos=aux_percorre_topicos->prox)
+    {
+        cont++;
+    }
+    return cont;
+}
+
+void elimina_lista_topicos_user(ptu lista)
+{
+    if(lista!=NULL)
+    {
+        elimina_lista_topicos_user(lista->prox);
+    }
+    free(lista);
 }
 
 // Thread para decrementar a duração das mensagens e elimina-las se expiraram
@@ -76,20 +117,22 @@ void *expiracao_de_mensagens(void *arg) {
                 else
                 {
                     aux_apaga = aux_percorre_a;
-                    for (aux_percorre_b = aux_percorre_topicos->lmensagem; aux_percorre_b != NULL; aux_percorre_b = aux_percorre_b = aux_percorre_b->prox)
+                    if(aux_apaga!=aux_percorre_topicos->lmensagem)
                     {
-                        if (aux_percorre_b->prox == aux_apaga)
+                        for (aux_percorre_b = aux_percorre_topicos->lmensagem; aux_percorre_b != NULL; aux_percorre_b = aux_percorre_b = aux_percorre_b->prox)
                         {
-                            if (aux_percorre_b == aux_percorre_topicos->lmensagem)
+                            if (aux_percorre_b->prox == aux_apaga)
                             {
-                                aux_percorre_topicos->lmensagem = aux_percorre_b->prox;
-                            }
-                            else
-                            {
-                                aux_percorre_b->prox = aux_apaga->prox;
+                                aux_percorre_b->prox=aux_apaga->prox;
                                 free(aux_apaga);
+                                break;
                             }
                         }
+                    }
+                    else
+                    {
+                        aux_percorre_topicos->lmensagem=aux_apaga->prox;
+                        free(aux_apaga);
                     }
                 } 
             }
@@ -122,20 +165,25 @@ void *inactividade_de_clientes(void *arg) {
             else
             {
                 aux_apaga = aux_percorre_a;
-                for (aux_percorre_b = users_head; aux_percorre_b != NULL; aux_percorre_b = aux_percorre_b = aux_percorre_b->prox)
+                if(aux_apaga!=users_head)
                 {
-                    if (aux_percorre_b->prox == aux_apaga)
+                    for (aux_percorre_b = users_head; aux_percorre_b != NULL; aux_percorre_b = aux_percorre_b = aux_percorre_b->prox)
                     {
-                       if (aux_percorre_b == users_head)
-                       {
-                            users_head = aux_percorre_b->prox;
-                       }
-                       else
-                       {
-                           aux_percorre_b->prox = aux_apaga->prox;
-                           free(aux_apaga);
-                       }
+                        if (aux_percorre_b->prox == aux_apaga)
+                        {
+                            aux_percorre_b->prox=aux_apaga->prox;
+                            aux_percorre_a=aux_percorre_b;
+                            elimina_lista_topicos_user(aux_apaga->topcs);
+                            free(aux_apaga);
+                            break;
+                        }
                     }
+                }
+                else
+                {
+                    users_head=aux_apaga->prox;
+                    aux_percorre_a=users_head;
+                    free(aux_apaga);
                 }
             } 
         }
@@ -158,7 +206,7 @@ void *envio_de_heartbeat(void *arg)
     {
         fprintf(stderr, "Info: Envio de Heartbeat.\n");
 
-        //TODO: Percorrer lista de clientes e ler dos fifos
+        //Percorrer lista de clientes e escrever dos fifos
         for (aux_percorre_a = users_head; aux_percorre_a!= NULL; aux_percorre_a = aux_percorre_a->prox)
         {
             strcpy(nome_fifo_cli_r, aux_percorre_a->fifor);
@@ -247,21 +295,52 @@ void *leitura_dos_fifos_dos_clientes(void *arg)
     cg msg_cg;
     gc msg_gc;
     pusr aux_percorre_users;
+    pusr aux_percorre_users_b;
     ptop aux_percorre_topicos;
     pmsg aux_percorre_mensagens;
     ptu aux_insere_topico_user;
     ptu aux_apaga_topico_user;
     ptu aux_a_percorre_topico_user;
     ptu aux_b_percorre_topico_user;
+    pusr aux_apaga_usr;
+    pusr aux_percorre_users_para_apagar;
+    pmsg aux_guarda_mensagem;
+    ptop aux_guarda_topico;
+    int encontrou_topico;
+    int encontrou_titulo;
+    char forb_words[50];
+    int infp, outfp;
+    char corpo[128];
+    int num_proib;
+    int resultado_verificacao;
     // FIFO para recepção: Gestor -> Cliente
     int fd_fifo;
     char nome_fifo_cli_w[20];
     char nome_fifo_cli_r[20];
-    char topicos[2001];
-    char titulos[2001];
+    char topicos[2021];
+    char titulos[2021];
 
     int verifica_leitura_fifo;
     pthread_t id = pthread_self();
+
+
+    // Obter variaveis de ambiente ou usar as default
+    if(getenv("WORDSNOT") == NULL)
+        strcpy(forb_words, DEFAULT_FORB_WORDS);
+    else
+        strcpy(forb_words, getenv("WORDSNOT"));
+
+    if(getenv("MAXNOT")==NULL)
+        num_proib=N_PROIB;
+    else
+        sscanf(getenv("MAXNOT"), "%d", &num_proib);
+
+    // Lança o verificador
+    if(lanca_verifica_mensagem(PROGRAMA_VERIFICADOR, forb_words, &infp, &outfp) <= 0)
+    {
+        fprintf(stderr, "Erro: Falha em lancar o verificador!\n");
+        fflush(stdout);
+    }
 
     while (1)
     {
@@ -269,19 +348,20 @@ void *leitura_dos_fifos_dos_clientes(void *arg)
         for (aux_percorre_users = users_head; aux_percorre_users!= NULL; aux_percorre_users = aux_percorre_users->prox)
         {
             strcpy(topicos,"");
-            strcpy(topicos,"");
+            strcpy(titulos,"");
 
             strcpy(nome_fifo_cli_w,aux_percorre_users->fifow);
             limpa_msg_cg(&msg_cg);
             fd_fifo = open(nome_fifo_cli_w, O_RDONLY);
-            verifica_leitura_fifo=read(fd_fifo,&msg_cg,sizeof(&msg_cg));
+            verifica_leitura_fifo=read(fd_fifo,&msg_cg,sizeof(msg_cg));
+            fprintf(stderr," num %d",verifica_leitura_fifo);
             if (verifica_leitura_fifo==0)
             {
                 close(fd_fifo);
             }
             else if (verifica_leitura_fifo==-1) 
             { // error
-                fprintf(stderr, "Erro: Não foi possivel ler do fifo (%S).\n", nome_fifo_cli_w);
+                fprintf(stderr, "Erro: Não foi possivel ler do fifo (%s).\n", nome_fifo_cli_w);
                 close(fd_fifo);
             } 
             else 
@@ -291,10 +371,85 @@ void *leitura_dos_fifos_dos_clientes(void *arg)
                 switch (msg_cg.tipoinfo)
                 {
                     case MSG_ENVIAR_MENSAGEM:
+                        if(EstadoFiltro==FILTRO_LIGADO)
+                        {
+                            resultado_verificacao = verifica_mensagem(infp, outfp, msg_cg.corpo, num_proib);
+                        }
+                        else
+                        {
+                            resultado_verificacao=1;
+                        }
+                        fprintf(stderr,"resultado ver %d",resultado_verificacao);
+                        if (resultado_verificacao < 1)
+                        {
+                            msg_erro_mensagem(&msg_gc,msg_cg.topico,msg_cg.titulo,msg_cg.corpo);
+                            escreve_msg_no_fifo(aux_percorre_users->fifor,&msg_gc);
+                        }
+                        else
+                        {
+                            fprintf(stderr,"aaa %s\n",msg_cg.topico);
+                            aux_guarda_mensagem=malloc(sizeof(msg));
+                            strcpy(aux_guarda_mensagem->topico,msg_cg.topico);
+                            strcpy(aux_guarda_mensagem->titulo,msg_cg.titulo);
+                            strcpy(aux_guarda_mensagem->corpo,msg_cg.corpo);
+                            aux_guarda_mensagem->duracao=msg_cg.duracao;
+                            encontrou_topico=0;
+                            for(aux_percorre_topicos=topicos_head;aux_percorre_topicos!=NULL;aux_percorre_topicos=aux_percorre_topicos->prox)
+                            {
+                                fprintf(stderr,"bbb\n");
+                                if(strcmp(aux_percorre_topicos->topico,aux_guarda_mensagem->topico)==0)
+                                {
+                                    fprintf(stderr,"ccc\n");
+                                    if(devolve_numero_titulos(aux_percorre_topicos->topico)<20)
+                                    {
+                                        fprintf(stderr,"ddd\n");
+                                        aux_guarda_mensagem->prox=aux_percorre_topicos->lmensagem;
+                                        aux_percorre_topicos->lmensagem=aux_guarda_mensagem;
+                                        encontrou_topico=1;
+                                        for(aux_percorre_users_b=users_head;aux_percorre_users_b!=NULL;aux_percorre_users_b=aux_percorre_users_b->prox)
+                                        {
+                                            fprintf(stderr,"eee\n");
+                                            for(aux_a_percorre_topico_user=aux_percorre_users->topcs;aux_a_percorre_topico_user!=NULL;aux_a_percorre_topico_user=aux_a_percorre_topico_user->prox)
+                                            {
+                                                fprintf(stderr,"fff\n");
+                                                if(strcmp(aux_a_percorre_topico_user->topico,msg_cg.topico)==0)
+                                                {
+                                                    fprintf(stderr,"ggg\n");
+                                                    msg_notificar_nova_mensagem_topico(&msg_gc,msg_cg.topico,msg_cg.titulo);
+                                                    escreve_msg_no_fifo(aux_percorre_users_b->fifor,&msg_gc);
+                                                }
+                                            }
+                                        }
+                                        break;
+                                    }
+                                    else
+                                    {
+                                        fprintf(stderr,"hhh\n");
+                                        msg_erro_mensagem(&msg_gc,msg_cg.topico,msg_cg.titulo,msg_cg.corpo);
+                                        escreve_msg_no_fifo(aux_percorre_users->fifor,&msg_gc);                                 
+                                    }
+                                }
+                            }
+                            if(encontrou_topico!=1)
+                            {
+                                fprintf(stderr,"iii\n");
+                                if(devolve_numero_topicos()<20)
+                                {
+                                    fprintf(stderr,"jjj\n");
+                                    aux_guarda_topico=malloc(sizeof(top));
+                                    strcpy(aux_guarda_topico->topico,aux_guarda_mensagem->topico);
+                                    aux_guarda_topico->lmensagem=NULL;
+                                    aux_guarda_mensagem->prox=aux_guarda_topico->lmensagem;
+                                    aux_guarda_topico->lmensagem=aux_guarda_mensagem;
+                                    aux_guarda_topico->prox=topicos_head;
+                                    topicos_head=aux_guarda_topico;
+                                    fprintf(stderr,"topicos %s\n",topicos_head->topico);
+                                    fprintf(stderr,"tam top %d\n",devolve_numero_topicos());
+                                }
+                            }
+                        }  
                         break;
-
                     case MSG_CONSULTAR_TOPICOS :
-                        //TODO: Mudar Tamanho topicos porque levam \n entre eles e dos titulos tambem
                         if(topicos_head!=NULL)
                         {
                             strcpy(topicos,topicos_head->topico);
@@ -307,122 +462,200 @@ void *leitura_dos_fifos_dos_clientes(void *arg)
                         else
                         {
                             strcpy(topicos,"A lista de topicos esta vazia\n");
+                            fprintf(stderr,"ERRO: A lista de topicos esta vazia\n");
                         }
                         msg_enviar_topicos(&msg_gc,topicos);
                         escreve_msg_no_fifo(aux_percorre_users->fifor,&msg_gc);
                         break;
 
                     case MSG_CONSULTAR_TITULOS_TOPICO:
-                        //TODO: Verificar se o topico existe
-                        //TODO: Verificar se o topico tem alguma mensagem, se nao, elimina-lo
                         if(topicos_head!=NULL)
                         {
+                            encontrou_topico=0;
                             for(aux_percorre_topicos=topicos_head->prox;aux_percorre_topicos!=NULL;aux_percorre_topicos=aux_percorre_topicos->prox)
                             {
-                            if(aux_percorre_topicos->topico==msg_cg.topico)
-                            {
-                                    strcpy(titulos,aux_percorre_topicos->lmensagem->titulo);
-                                    for(aux_percorre_mensagens=aux_percorre_topicos->lmensagem->prox;aux_percorre_mensagens!=NULL;aux_percorre_mensagens=aux_percorre_mensagens->prox)
+                                if(strcmp(aux_percorre_topicos->topico,msg_cg.topico)==0)
+                                {
+                                    if(aux_percorre_topicos->lmensagem!=NULL)
                                     {
-                                        strcat(titulos,"\n");
-                                        strcat(titulos,aux_percorre_mensagens->titulo);
+                                        
+                                        strcpy(titulos,aux_percorre_topicos->lmensagem->titulo);
+                                        for(aux_percorre_mensagens=aux_percorre_topicos->lmensagem->prox;aux_percorre_mensagens!=NULL;aux_percorre_mensagens=aux_percorre_mensagens->prox)
+                                        {
+                                            strcat(titulos,"\n");
+                                            strcat(titulos,aux_percorre_mensagens->titulo);
+                                        }
                                     }
+                                    else
+                                    {
+                                        strcpy(titulos,"A lista de titulos do topico pretendido esta vazia\n");
+                                        fprintf(stderr,"A lista de titulos do topico %s esta vazia\n",msg_cg.topico);
+                                    }
+                                    encontrou_topico=1;
                                     break;
+                                }
                             }
+                            if(encontrou_topico!=1)
+                            {
+                                strcpy(titulos,"O topico nao existe!\n");
+                                fprintf(stderr,"ERRO: O topico nao existe!\n");
                             }
-                            msg_enviar_titulos_topico(&msg_gc,msg_cg.topico,titulos);
-                            escreve_msg_no_fifo(aux_percorre_users->fifor,&msg_gc);
                         }
                         else
                         {
-                            //??
+                            strcpy(titulos,"A lista de topicos esta vazia\n");
                             fprintf(stderr,"ERRO: A lista de topicos esta vazia\n");
                         }
+                        msg_enviar_titulos_topico(&msg_gc,msg_cg.topico,titulos);
+                        escreve_msg_no_fifo(aux_percorre_users->fifor,&msg_gc);
                         break;
 
                     case MSG_CONSULTAR_MENSAGEM_TOPICO:
                         if(topicos_head!=NULL)
                         {
+                            encontrou_topico=0;
                             for(aux_percorre_topicos=topicos_head->prox;aux_percorre_topicos!=NULL;aux_percorre_topicos=aux_percorre_topicos->prox)
                             {
-                            if(aux_percorre_topicos->topico==msg_cg.topico)
-                            {
+                                if(strcmp(aux_percorre_topicos->topico,msg_cg.topico)==0)
+                                {
+                                    encontrou_titulo=0;
                                     for(aux_percorre_mensagens=aux_percorre_topicos->lmensagem;aux_percorre_mensagens!=NULL;aux_percorre_mensagens=aux_percorre_mensagens->prox)
                                     {
-                                        if(aux_percorre_mensagens->titulo==msg_cg.titulo)
+                                        if(strcmp(aux_percorre_mensagens->titulo,msg_cg.titulo)==0)
                                         {
                                             msg_enviar_mensagem_topico(&msg_gc,msg_cg.topico,msg_cg.titulo,aux_percorre_mensagens->corpo);
+                                            encontrou_titulo=1;
                                             break;
                                         }
                                     }
+                                    encontrou_topico=1;
+                                    if(encontrou_titulo!=1)
+                                    {
+                                        msg_enviar_informacao(&msg_gc,"O titulo nao existe!\n");
+                                        fprintf(stderr,"ERRO: O titulo nao existe!\n");
+                                    }
                                     break;
+                                }
                             }
+                            if(encontrou_topico!=1)
+                            {
+                                msg_enviar_informacao(&msg_gc,"O topico nao existe!\n");
+                                fprintf(stderr,"ERRO: O topico nao existe!\n");
                             }
-                            escreve_msg_no_fifo(aux_percorre_users->fifor,&msg_gc);
                         }
                         else
                         {
-                            //??
+                            msg_enviar_informacao(&msg_gc,"A lista de topicos esta vazia\n");
                             fprintf(stderr,"ERRO: A lista de topicos esta vazia\n");
                         }
+                        escreve_msg_no_fifo(aux_percorre_users->fifor,&msg_gc);
                         break;
 
                     case MSG_SUBSCREVER_TOPICO:
                         if(topicos_head!=NULL)
                         {
+                            encontrou_topico=0;
                             for(aux_percorre_topicos=topicos_head->prox;aux_percorre_topicos!=NULL;aux_percorre_topicos=aux_percorre_topicos->prox)
                             {
-                                if(aux_percorre_topicos->topico==msg_cg.topico)
+                                if(strcmp(aux_percorre_topicos->topico,msg_cg.topico)==0)
                                 {
                                     aux_insere_topico_user=malloc(sizeof(tu));
                                     strcpy(aux_insere_topico_user->topico,msg_cg.topico);
                                     aux_insere_topico_user->prox=aux_percorre_users->topcs;
                                     aux_percorre_users->topcs=aux_insere_topico_user;
                                     msg_confirmar_subscricao_de_topico(&msg_gc,aux_percorre_topicos->topico);
+                                    encontrou_topico=1;
+                                    break;
+                                }
+                            }
+                            if(encontrou_topico!=1)
+                            {
+                                msg_enviar_informacao(&msg_gc,"O topico nao existe\n");
+                                fprintf(stderr,"ERRO: O topico nao existe\n");
+                            }
+
+                        }
+                        else
+                        {
+                           msg_enviar_informacao(&msg_gc,"A lista de topicos esta vazia\n");
+                           fprintf(stderr,"ERRO: A lista de topicos esta vazia\n");
+                        }
+                        escreve_msg_no_fifo(aux_percorre_users->fifor,&msg_gc);
+                        break;
+
+                    case MSG_CANCELAR_SUBSCICAO_TOPICO:
+                        if(aux_percorre_users_b->topcs!=NULL)
+                        {
+                            encontrou_topico=0;
+                            for(aux_a_percorre_topico_user = aux_percorre_users_b->topcs;aux_a_percorre_topico_user!=NULL;aux_a_percorre_topico_user=aux_a_percorre_topico_user->prox)
+                            {
+                                if(strcmp(aux_a_percorre_topico_user->topico,msg_cg.topico)==0)
+                                {
+                                    aux_apaga_topico_user=aux_a_percorre_topico_user;
+                                    if(aux_apaga_topico_user!=aux_percorre_users_b->topcs)
+                                    {
+                                        for(aux_b_percorre_topico_user=aux_percorre_users_b->topcs;aux_a_percorre_topico_user!=NULL;aux_a_percorre_topico_user=aux_a_percorre_topico_user->prox)
+                                        {
+                                            if(aux_b_percorre_topico_user->prox == aux_apaga_topico_user)
+                                            {
+                                                aux_b_percorre_topico_user->prox=aux_apaga_topico_user->prox;
+                                                aux_a_percorre_topico_user=aux_b_percorre_topico_user;
+                                                free(aux_apaga_topico_user);
+                                                break;
+                                            }
+                                        }
+                                    }
+                                    else
+                                    {
+                                        aux_percorre_users->topcs=aux_apaga_topico_user->prox;
+                                        aux_a_percorre_topico_user=aux_percorre_users->topcs;
+                                        free(aux_percorre_users);
+                                    }
+                                    msg_confirmar_cancelamento_subscricao_de_topico(&msg_gc,aux_percorre_topicos->topico);
+                                    break;
+                                }
+                            }
+                            if(encontrou_topico!=1)
+                            {
+                                msg_enviar_informacao(&msg_gc,"O topico nao existe na sua lista de topicos subscrito\n");
+                                fprintf(stderr,"ERRO: O topico nao existe na sua lista de topicos subscrito\n");
+                            }
+                        }
+                        else
+                        {
+                            msg_enviar_informacao(&msg_gc,"Nao tem topicos subscritos\n");
+                            fprintf(stderr,"ERRO: Nao tem topicos subscritos\n");
+                        }
+                        escreve_msg_no_fifo(aux_percorre_users->fifor,&msg_gc);
+                        break;
+
+                    case MSG_ENVIAR_HEARTBEAT_CLIENTE:
+                        //Nao faz nada pois qualquer tipo de mensagem serve de heartbeat
+                        break;
+
+                    case MSG_NOTIFICAR_FIM_EXECUCAO_CLIENTE:
+                        aux_apaga_usr=aux_percorre_users;
+                        if(aux_apaga_usr!=users_head)
+                        {
+                            for(aux_percorre_users_para_apagar=users_head;aux_percorre_users_para_apagar!=NULL;aux_percorre_users_para_apagar=aux_percorre_users_para_apagar->prox)
+                            {
+                                if(aux_percorre_users_para_apagar->prox == aux_apaga_usr)
+                                {
+                                    aux_percorre_users_para_apagar->prox = aux_apaga_usr->prox;
+                                    aux_percorre_users=aux_percorre_users_para_apagar;
+                                    elimina_lista_topicos_user(aux_apaga_usr->topcs);
+                                    free(aux_apaga_usr);
                                     break;
                                 }
                             }
                         }
                         else
                         {
-                            fprintf(stderr,"ERRO: A lista de topicos esta vazia\n");
+                            users_head = aux_apaga_usr->prox;
+                            aux_percorre_users=users_head;
+                            elimina_lista_topicos_user(aux_apaga_usr->topcs);
+                            free(aux_apaga_usr);
                         }
-                        escreve_msg_no_fifo(aux_percorre_users->fifor,&msg_gc);
-                        break;
-
-                    case MSG_CANCELAR_SUBSCICAO_TOPICO:
-                        for(aux_a_percorre_topico_user = aux_percorre_users->topcs;aux_a_percorre_topico_user!=NULL;aux_a_percorre_topico_user=aux_a_percorre_topico_user->prox)
-                        {
-                            if(aux_a_percorre_topico_user->topico == msg_cg.topico)
-                            {
-                                aux_apaga_topico_user=aux_a_percorre_topico_user;
-                                if(aux_apaga_topico_user!=aux_percorre_users->topcs)
-                                {
-                                    for(aux_b_percorre_topico_user=aux_percorre_users->topcs;aux_a_percorre_topico_user!=NULL;aux_a_percorre_topico_user=aux_a_percorre_topico_user->prox)
-                                    {
-                                        if(aux_b_percorre_topico_user->prox == aux_apaga_topico_user)
-                                        {
-                                            aux_b_percorre_topico_user->prox=aux_apaga_topico_user->prox;
-                                            free(aux_apaga_topico_user);
-                                            break;
-                                        }
-                                    }
-                                }
-                                else
-                                {
-                                    aux_percorre_users->topcs=aux_apaga_topico_user->prox;
-                                }
-                                break;
-                            }
-                        }
-                        msg_confirmar_cancelamento_subscricao_de_topico(&msg_gc,aux_percorre_topicos->topico);
-                        escreve_msg_no_fifo(aux_percorre_users->fifor,&msg_gc);
-                        break;
-
-                    case MSG_ENVIAR_HEARTBEAT_CLIENTE:
-                        break;
-
-                    case MSG_NOTIFICAR_FIM_EXECUCAO_CLIENTE:
                         break;
                         
                     default:
@@ -464,38 +697,323 @@ void *leitura_dos_fifos_dos_clientes(void *arg)
 // TODO: Thread para tratar da interacção com o utilizador
 void *interaccao_com_utilizador(void *arg)
 {
-     pthread_t id = pthread_self();
+    gc msg_gc;
+    char input[MAXCOMANDO];
+    char com[20];
+    char argumento[20];
+    int found_topic = 0;
+    int found_msg = 0;
+    int found_usr = 0;
+    pusr aux_percorreusr;
+    pusr aux_apaga_usr;
+    pusr aux_percorreusr_b;
+    ptu aux_percorre_b;
+    ptu aux_top_usr;
+    ptu aux_apaga_top_usr;
+    ptu aux_top_usr_b;
+    pmsg aux_percorremsg;
+    ptop aux_percorretop;
+    ptop aux_percorretop_b;
+    ptop aux_apaga_top;
+    ptop ux_percorretop_b;
+    pthread_t id = pthread_self();
 
     while (1)
     {
-        //TODO: Percorrer lista de clientes e ler dos fifos
-        /*while ()
+        printf("Comando -> ");
+        fgets(com,MAXCOMANDO,stdin);
+        if (sscanf(com, "%s %s", com, argumento) != 2)
         {
-            fd_fifo = open(nome_fifo_cli_r, O_RDONLY);
-
-            // Ler do fifo
-            read(fd_fifo, &msg_gc, sizeof(msg_gc));
-
-            // imprimir log
-            fprintf(stderr, "Info: Recebida mensagem do tipo (%d).\n", msg_gc.tipoinfo);
-
-            switch (msg_gc.tipoinfo){
-                case MSG_CONFIRMAR_USERNAME:
-
-                    break;
-                default:
-                    fprintf(stderr, "Erro: Recebida mensagem de tipo invlálido (%d).\n", msg_gc.tipoinfo);
+            argumento[0] = '\0';
+        }
+        //Filtro do verificador
+        if (strcmp(com, "filter") == 0 && argumento[0] != '\0' && (strcmp(argumento,"on") == 0 || strcmp(argumento,"off") == 0))
+        {
+            if(strcmp(argumento,"on") == 0)
+            {
+                EstadoFiltro = FILTRO_LIGADO;
             }
+            else
+            {
+                if (strcmp(argumento,"off") == 0)
+                {
+                    EstadoFiltro = FILTRO_DESLIGADO;
+                }
+            }
+            
+        }
+        else
+        {
+            //Lista os users
+            if(strcmp(com, "users") == 0)
+            {
+                if(users_head != NULL)
+                {
+                    printf("Lista de Users:\n");
+                    for (aux_percorreusr = users_head; aux_percorreusr != NULL; aux_percorreusr = aux_percorreusr->prox)
+                    {
+                        printf("Username: %s\n", aux_percorreusr->nome);
+                    }
+                }
+                else
+                {
+                    printf("A lista de Users esta vazia!!!");
+                }
+                
+            }
+            else
+            {
+                //Lista os topicos
+                if(strcmp(com, "topics") == 0)
+                {
+                    if(topicos_head != NULL)
+                    {
+                        printf("Lista de Topicos:\n");
+                        for(aux_percorretop = topicos_head; aux_percorretop != NULL; aux_percorretop = aux_percorretop->prox)
+                        {
+                            printf("%s\n", aux_percorretop->topico);
+                        }
+                    }
+                    else
+                    {
+                        printf("A lista de Topicos esa vazia!!!");
+                    }
+                    
+                }
+                else
+                {
+                    //Lista as mensagens
+                    if(strcmp(com, "msg") == 0)
+                    {
+                        if(topicos_head != NULL)
+                        {
+                            printf("Lista de mensagens\n");
+                            for(aux_percorretop = topicos_head; aux_percorretop != NULL; aux_percorretop = aux_percorretop->prox)
+                            {
+                                for (aux_percorremsg = aux_percorretop->lmensagem; aux_percorremsg != NULL; aux_percorremsg = aux_percorremsg->prox)
+                                {
+                                    printf("%s\n", aux_percorremsg->titulo);
+                                }
+                            }
+                        }
+                        else
+                        {
+                            printf("A lista de Topicos esta vazia!!!");
+                        }
+                        
 
-            close(fd_fifo);
-        }*/
+                    }
+                    else
+                    {
+                        //Lista mensagens de um certo topico
+                        if(strcmp(com, "topic") == 0 && argumento[0] != '\0')
+                        {
+                            if (topicos_head != NULL)
+                            { 
+                                for(aux_percorretop = topicos_head; aux_percorretop != NULL; aux_percorretop = aux_percorretop->prox)
+                                {
+                                    if (strcmp(argumento,aux_percorretop->topico) == 0)
+                                    {
+                                        found_topic = 1;
+                                        printf("Lista de Mensagens do topico %s:\n", argumento);
+                                        for(aux_percorremsg = aux_percorretop->lmensagem; aux_percorremsg != NULL; aux_percorremsg = aux_percorremsg->prox)
+                                        {
+                                            printf("%s\n", aux_percorremsg->titulo);
+                                        }
+                                        break;
+                                    }
 
+                                }
+                                if (found_topic == 0)
+                                {
+                                    printf("O Topico nao existe!!!");
+                                }
+                            }
+                            else
+                            {
+                                printf("A Lista de topicos esta vazia!!!");
+                            }
+                            
+
+                        }
+                        else
+                        {
+                            //Elimina uma mensagem
+                            if(strcmp(com,"del") == 0 && argumento[0] != '\0')
+                            {
+                                if (topicos_head != NULL)
+                                {
+                                    for(aux_percorretop = topicos_head; aux_percorretop != NULL; aux_percorretop = aux_percorretop->prox)
+                                    {
+                                        for(aux_percorremsg = aux_percorretop->lmensagem; aux_percorremsg != NULL; aux_percorremsg = aux_percorremsg->prox)
+                                        {
+                                            if(strcmp(argumento, aux_percorremsg->titulo) == 0)
+                                            {
+                                                found_msg = 1;
+                                                aux_percorremsg->duracao = 0;
+                                                break;
+                                            }
+                                        }
+                                    }
+                                    if (found_msg == 0)
+                                    {
+                                        printf("A Mensagem nao existe!!!");
+                                    }
+                                }
+                                else
+                                {
+                                    printf("A lista de Topicos esta vazia!!!");
+                                }
+                                
+                            }
+                            else
+                            {
+                                //Kick um utilixador
+                                if(strcmp(com,"kick") == 0 && argumento[0] != '\0')
+                                {
+                                    if (users_head != NULL)
+                                    {
+                                        for(aux_percorreusr = users_head; aux_percorreusr != NULL; aux_percorreusr = aux_percorreusr->prox)
+                                        {
+                                            if(strcmp(argumento,aux_percorreusr->nome) == 0)
+                                            {
+                                                found_usr = 1;
+                                                aux_apaga_usr = aux_percorreusr;
+                                                if(aux_apaga_usr != users_head)
+                                                {
+                                                    for (aux_percorreusr_b = users_head; aux_percorreusr_b != NULL; aux_percorreusr_b = aux_percorreusr_b->prox)
+                                                    {
+                                                        if (aux_percorreusr_b->prox == aux_apaga_usr)
+                                                        {
+                                                            msg_cliente_banido(&msg_gc);
+                                                            escreve_msg_no_fifo(aux_percorreusr_b->fifor, &msg_gc);
+                                                            aux_percorreusr_b->prox=aux_apaga_usr->prox;
+                                                            elimina_lista_topicos_user(aux_apaga_usr->topcs);
+                                                            free(aux_apaga_usr);
+                                                            break;
+                                                        }
+                                                    }
+                                                }
+                                                else
+                                                {
+                                                    users_head=aux_apaga_usr->prox;
+                                                    elimina_lista_topicos_user(aux_apaga_usr->topcs);
+                                                    free(aux_apaga_usr);
+                                                }
+                                            }
+                                        }
+                                        if (found_usr == 0)
+                                        {
+                                            printf("O utilizador nao existe!!!");
+                                        }
+                                    }
+                                    printf("A lista de Users esta vazia!!!");
+                                }
+                                else
+                                {
+                                    //Elimina os topicos vazios
+                                    if(strcmp(com,"prune") == 0)
+                                    {
+                                        if (topicos_head != NULL)
+                                        {
+                                            for(aux_percorretop = topicos_head; aux_percorretop != NULL; aux_percorretop = aux_percorretop->prox)
+                                            {
+                                                if(aux_percorretop->lmensagem == NULL)
+                                                {
+                                                    aux_apaga_top = aux_percorretop;
+                                                    if (users_head != NULL)
+                                                    {
+                                                        for(aux_percorreusr = users_head; aux_percorreusr != NULL; aux_percorreusr = aux_percorreusr->prox)
+                                                        { 
+                                                            if(aux_percorreusr->topcs != NULL)
+                                                            {
+                                                                for(aux_top_usr = aux_percorreusr->topcs; aux_top_usr != NULL; aux_top_usr = aux_top_usr->prox)
+                                                                {
+                                                                    if(strcmp(aux_top_usr->topico,aux_percorretop->topico) == 0)
+                                                                    {
+                                                                        aux_apaga_top_usr = aux_top_usr;
+                                                                        if (aux_apaga_top_usr != aux_percorreusr->topcs)
+                                                                        {
+                                                                            for(aux_top_usr_b = aux_percorreusr->topcs; aux_top_usr_b != NULL; aux_top_usr_b = aux_top_usr_b->prox)
+                                                                            {
+                                                                                if(aux_top_usr_b->prox == aux_apaga_top_usr)
+                                                                                {
+                                                                                    aux_top_usr_b->prox = aux_apaga_top_usr->prox;
+                                                                                    aux_top_usr = aux_top_usr_b;
+                                                                                    free(aux_apaga_top_usr);
+                                                                                    break;
+                                                                                }
+                                                                            }
+                                                                        }
+                                                                        else
+                                                                        {
+                                                                            aux_percorreusr->topcs = aux_apaga_top_usr->prox;
+                                                                            aux_top_usr = aux_percorreusr->topcs;
+                                                                            free(aux_apaga_top_usr);
+                                                                        }
+                                                                        
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                    if (aux_apaga_top != topicos_head)
+                                                    {
+                                                        for(aux_percorretop_b = topicos_head; aux_percorretop_b != NULL; aux_percorretop_b->prox)
+                                                        {
+                                                            if(aux_percorretop_b->prox == aux_apaga_top)
+                                                            {
+                                                                aux_percorretop_b->prox = aux_apaga_top->prox;
+                                                                aux_percorretop = aux_percorretop_b;
+                                                                free(aux_apaga_top);
+                                                            }
+                                                        }
+                                                    }
+                                                    else
+                                                    {
+                                                        aux_percorretop = aux_apaga_top->prox;
+                                                        free(aux_apaga_top);
+                                                    }                                                    
+                                                }
+                                            }
+                                        }
+                                        else
+                                        {
+                                            printf("A Lista de topicos esta vazia!!!");
+                                        }
+                                    }
+                                    else
+                                    {
+                                        if (strcmp(com,"shutdown") == 0)
+                                        {
+                                            if(users_head != NULL)
+                                            {
+                                                for(aux_percorreusr = users_head; aux_percorreusr != NULL; aux_percorreusr = aux_percorreusr = aux_percorreusr->prox)
+                                                {
+                                                    msg_fim_de_execucao_gestor(&msg_gc);
+                                                    escreve_msg_no_fifo(aux_percorreusr->fifor, &msg_gc);
+                                                    exit (0);
+                                                }
+                                            }
+                                        }
+                                        else
+                                        {
+                                            printf("Comando Invalido!!!\n");
+                                        }
+                                        
+                                    } 
+                                }
+                            }
+                        }  
+                    }  
+                } 
+            }  
+        }
     }
 
     return NULL;
 }
 
-// TODO: Thread para lançar o verificador
 
 int main(void)
 {
@@ -559,6 +1077,8 @@ int main(void)
         fprintf(stderr, "Erro: Não foi possivel criar a thread de interacção com o utilizador. Erro: %s.\n", strerror(erro));
     else
         fprintf(stderr, "Info: Thread de interacção com o utilizador criada.\n");
+
+
     
 
     while (1){

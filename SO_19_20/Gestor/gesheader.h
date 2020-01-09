@@ -17,6 +17,12 @@
 #define INTERVALO_HEARTBEAT 1 // 1 Segundo
 #define TEMPO_INATIVIDADE_CLIENTE 10 // 10 segundos
 
-#define MAXMSG 10
-#define MAXCOM 30
-#define N_PROIB 1
+// Defs para o verificador
+#define PROGRAMA_VERIFICADOR "Bin/Verificador"
+#define DEFAULT_FORB_WORDS "Verificador/fwords.txt"
+#define N_PROIB 3
+#define MAXCOMANDO 31
+#define FILTRO_LIGADO 1
+#define FILTRO_DESLIGADO 0
+
+

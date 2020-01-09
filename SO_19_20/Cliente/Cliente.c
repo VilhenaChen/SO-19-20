@@ -239,6 +239,24 @@ void *leitura_do_fifo(void *arg)
                 fflush(stdout);
                 break;
 
+            case  MSG_ENVIAR_INFORMACAO:
+                fprintf(stdout, "\n-------------------------------------------------\n");
+                fprintf(stdout, "%s\n", msg_gc.informacao);
+                fprintf(stdout, "-------------------------------------------------\n");
+                fflush(stdout);
+                break;
+            
+            case  MSG_CLIENTE_BANIDO:
+                fprintf(stdout, "\n-------------------------------------------------\n");
+                fprintf(stdout, "Foi banido pelo Administrador, o Programa Cliente vai encerrar!\n");
+                fprintf(stdout, "-------------------------------------------------\n");
+                fflush(stdout);
+                
+                // Terminar o programa
+                fprintf(stderr, "Info: Programa cliente a terminar.\n");
+                exit(1);
+                break;
+
             default:
                 fprintf(stderr, "Erro: Recebida mensagem de tipo inválido (%d).\n", msg_gc.tipoinfo);
         }

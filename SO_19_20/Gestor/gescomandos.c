@@ -106,7 +106,7 @@ void lista_mensagens()
         printf("\nCachecol encontrado\n");
         printf("Cartao de Cidadao Perdido\n");
         printf("Carteira encontrada\n");
- printf("Pagamento de Servico\n");
+        printf("Pagamento de Servico\n");
         printf("Pedido de Reembolso\n");
         printf("Sistema de Seguranca\n");
         printf("Curriculo Carolina Carvalho\n");

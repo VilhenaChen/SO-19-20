@@ -25,6 +25,8 @@
 #define MSG_ENVIAR_HEARTBEAT_GESTOR 107
 #define MSG_NOTIFICAR_FIM_EXECUCAO_GESTOR 108
 #define MSG_NOTIFICAR_NOVA_MENSAGEM_TOPICO 109
+#define MSG_ENVIAR_INFORMACAO 110
+#define MSG_CLIENTE_BANIDO 111
 
 // Fifos
 #define FIFO_PASTA "Fifos"
@@ -45,8 +47,8 @@ struct cli_gest
     char fifoclienvia[20];
     char fifoclirecebe[20];
     char corpo[1001];
-    char topico[101];
-    char titulo[101];
+    char topico[2021];
+    char titulo[2021];
     int duracao;
 	pcg prox;
 };
@@ -61,8 +63,8 @@ struct gest_cli
     char corpo[1001];
     char topico[101];
     char titulo[101];
-    char topicos[2001];
-    char titulos[2001];
+    char topicos[2021];
+    char titulos[2021];
 	pgc prox;
 };
 
